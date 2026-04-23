@@ -235,6 +235,60 @@ describe.sequential("execution environment route guards", () => {
     expect(mockProjectService.update).toHaveBeenCalled();
   });
 
+  it("rejects cross-company environments on project create", async () => {
+    mockEnvironmentService.getById.mockResolvedValue({
+      id: sshEnvironmentId,
+      companyId: "company-2",
+      driver: "ssh",
+      config: {},
+    });
+    const app = createProjectApp();
+
+    const res = await request(app)
+      .post("/api/companies/company-1/projects")
+      .send({
+        name: "Cross Company Project",
+        executionWorkspacePolicy: {
+          enabled: true,
+          environmentId: sshEnvironmentId,
+        },
+      });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe("Environment not found.");
+    expect(mockProjectService.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported driver environments on project update", async () => {
+    mockProjectService.getById.mockResolvedValue({
+      id: "project-1",
+      companyId: "company-1",
+      name: "SSH Project",
+      status: "backlog",
+      archivedAt: null,
+    });
+    mockEnvironmentService.getById.mockResolvedValue({
+      id: sshEnvironmentId,
+      companyId: "company-1",
+      driver: "unsupported_driver",
+      config: {},
+    });
+    const app = createProjectApp();
+
+    const res = await request(app)
+      .patch("/api/projects/project-1")
+      .send({
+        executionWorkspacePolicy: {
+          enabled: true,
+          environmentId: sshEnvironmentId,
+        },
+      });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toContain('Environment driver "unsupported_driver" is not allowed here');
+    expect(mockProjectService.update).not.toHaveBeenCalled();
+  });
+
   it("accepts SSH environments on issue create", async () => {
     mockEnvironmentService.getById.mockResolvedValue({
       id: sshEnvironmentId,

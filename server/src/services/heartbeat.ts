@@ -427,6 +427,8 @@ function buildExecutionWorkspaceConfigSnapshot(
 ): Partial<ExecutionWorkspaceConfig> | null {
   const strategy = parseObject(config.workspaceStrategy);
   const snapshot: Partial<ExecutionWorkspaceConfig> = {};
+  // Persist the resolved environment onto the workspace so reused sessions stay on the
+  // environment they were created against until the workspace itself is recreated/reset.
   const hasExplicitEnvironmentSelection = environmentId !== undefined;
 
   if (hasExplicitEnvironmentSelection) {
