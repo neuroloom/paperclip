@@ -1036,6 +1036,31 @@ describe("environment routes", () => {
     );
   });
 
+  it("skips SSH secret cleanup gracefully when stored SSH config no longer parses", async () => {
+    const environment = {
+      ...createEnvironment(),
+      name: "SSH Fixture",
+      driver: "ssh" as const,
+      config: {
+        host: "",
+        username: "ssh-user",
+      },
+    };
+    mockEnvironmentService.getById.mockResolvedValue(environment);
+    mockEnvironmentService.remove.mockResolvedValue(environment);
+    const app = createApp({
+      type: "board",
+      userId: "user-1",
+      source: "local_implicit",
+    });
+
+    const res = await request(app).delete(`/api/environments/${environment.id}`);
+
+    expect(res.status).toBe(200);
+    expect(mockEnvironmentService.remove).toHaveBeenCalledWith(environment.id);
+    expect(mockSecretService.remove).not.toHaveBeenCalled();
+  });
+
   it("returns 404 when deleting a missing environment", async () => {
     mockEnvironmentService.getById.mockResolvedValue(null);
     const app = createApp({

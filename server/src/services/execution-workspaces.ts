@@ -745,31 +745,34 @@ export function executionWorkspaceService(db: Db) {
     },
 
     clearEnvironmentSelection: async (companyId: string, environmentId: string) => {
-      const rows = await db
-        .select({
-          id: executionWorkspaces.id,
-          metadata: executionWorkspaces.metadata,
-        })
-        .from(executionWorkspaces)
-        .where(eq(executionWorkspaces.companyId, companyId));
-
-      let cleared = 0;
-      for (const row of rows) {
-        const metadata = (row.metadata as Record<string, unknown> | null) ?? null;
-        const config = readExecutionWorkspaceConfig(metadata);
-        if (config?.environmentId !== environmentId) continue;
-
-        await db
-          .update(executionWorkspaces)
-          .set({
-            metadata: mergeExecutionWorkspaceConfig(metadata, { environmentId: null }),
-            updatedAt: new Date(),
+      return db.transaction(async (tx) => {
+        const rows = await tx
+          .select({
+            id: executionWorkspaces.id,
+            metadata: executionWorkspaces.metadata,
           })
-          .where(eq(executionWorkspaces.id, row.id));
-        cleared += 1;
-      }
+          .from(executionWorkspaces)
+          .where(eq(executionWorkspaces.companyId, companyId));
 
-      return cleared;
+        let cleared = 0;
+        const updatedAt = new Date();
+        for (const row of rows) {
+          const metadata = (row.metadata as Record<string, unknown> | null) ?? null;
+          const config = readExecutionWorkspaceConfig(metadata);
+          if (config?.environmentId !== environmentId) continue;
+
+          await tx
+            .update(executionWorkspaces)
+            .set({
+              metadata: mergeExecutionWorkspaceConfig(metadata, { environmentId: null }),
+              updatedAt,
+            })
+            .where(eq(executionWorkspaces.id, row.id));
+          cleared += 1;
+        }
+
+        return cleared;
+      });
     },
   };
 }

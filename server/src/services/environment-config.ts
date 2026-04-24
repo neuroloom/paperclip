@@ -206,6 +206,15 @@ export async function resolveEnvironmentDriverConfigForRuntime(
   return parsed;
 }
 
+export function readSshEnvironmentPrivateKeySecretId(
+  environment: Pick<Environment, "driver" | "config">,
+): string | null {
+  if (environment.driver !== "ssh") return null;
+  const parsed = sshEnvironmentConfigSchema.safeParse(parseObject(environment.config));
+  if (!parsed.success) return null;
+  return parsed.data.privateKeySecretRef?.secretId ?? null;
+}
+
 export function parseEnvironmentDriverConfig(
   environment: Pick<Environment, "driver" | "config">,
 ): ParsedEnvironmentConfig {
