@@ -133,7 +133,7 @@ describe("IssueWorkspaceCard", () => {
 
     useQueryMock.mockImplementation((options: { queryKey: unknown[] }) => {
       if (options.queryKey[0] === "instance") {
-        return { data: { enableIsolatedWorkspaces: true } };
+        return { data: { enableEnvironments: true, enableIsolatedWorkspaces: true } };
       }
       if (options.queryKey[0] === "environments") {
         return {
@@ -193,6 +193,54 @@ describe("IssueWorkspaceCard", () => {
         environmentId: null,
       },
     });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("hides environment UI when environments are disabled", () => {
+    const root = createRoot(container);
+
+    useQueryMock.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === "instance") {
+        return { data: { enableEnvironments: false, enableIsolatedWorkspaces: true } };
+      }
+      if (options.queryKey[0] === "execution-workspaces") {
+        return { data: [createExecutionWorkspace()] };
+      }
+      return { data: undefined };
+    });
+
+    act(() => {
+      root.render(
+        <IssueWorkspaceCard
+          issue={createIssue()}
+          project={{
+            id: "project-1",
+            executionWorkspacePolicy: {
+              enabled: true,
+              defaultMode: "isolated_workspace",
+              environmentId: "env-project",
+            },
+          }}
+          onUpdate={vi.fn()}
+        />,
+      );
+    });
+
+    expect(container.textContent).not.toContain("Environment:");
+
+    const editButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Edit"));
+    expect(editButton).not.toBeUndefined();
+
+    act(() => {
+      editButton!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+
+    const selects = container.querySelectorAll("select");
+    expect(selects).toHaveLength(2);
+    expect(container.textContent).not.toContain("Project default environment");
 
     act(() => {
       root.unmount();

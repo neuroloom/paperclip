@@ -13,6 +13,7 @@ import { companiesApi } from "../api/companies";
 import { accessApi } from "../api/access";
 import { assetsApi } from "../api/assets";
 import { environmentsApi } from "../api/environments";
+import { instanceSettingsApi } from "../api/instanceSettings";
 import { secretsApi } from "../api/secrets";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
@@ -219,15 +220,22 @@ export function CompanySettings() {
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [snippetCopyDelightId, setSnippetCopyDelightId] = useState(0);
 
+  const { data: experimentalSettings } = useQuery({
+    queryKey: queryKeys.instance.experimentalSettings,
+    queryFn: () => instanceSettingsApi.getExperimental(),
+    retry: false,
+  });
+  const environmentsEnabled = experimentalSettings?.enableEnvironments === true;
+
   const { data: environments } = useQuery({
     queryKey: selectedCompanyId ? queryKeys.environments.list(selectedCompanyId) : ["environments", "none"],
     queryFn: () => environmentsApi.list(selectedCompanyId!),
-    enabled: Boolean(selectedCompanyId),
+    enabled: Boolean(selectedCompanyId) && environmentsEnabled,
   });
   const { data: environmentCapabilities } = useQuery({
     queryKey: selectedCompanyId ? ["environment-capabilities", selectedCompanyId] : ["environment-capabilities", "none"],
     queryFn: () => environmentsApi.capabilities(selectedCompanyId!),
-    enabled: Boolean(selectedCompanyId),
+    enabled: Boolean(selectedCompanyId) && environmentsEnabled,
   });
 
   const { data: secrets } = useQuery({
@@ -734,6 +742,7 @@ export function CompanySettings() {
         </div>
       )}
 
+      {environmentsEnabled ? (
       <div className="space-y-4" data-testid="company-settings-environments-section">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Environments
@@ -1087,6 +1096,7 @@ export function CompanySettings() {
           </div>
         </div>
       </div>
+      ) : null}
 
       {/* Hiring */}
       <div className="space-y-4" data-testid="company-settings-team-section">
