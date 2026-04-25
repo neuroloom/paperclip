@@ -1029,11 +1029,17 @@ export function CompanySettings() {
                       className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
                       value={environmentForm.sandboxProvider}
                       onChange={(e) => {
-                        const nextProvider = pluginSandboxProviders.find((provider) => provider.provider === e.target.value) ?? null;
+                        const nextProviderKey = e.target.value;
+                        const nextProvider = pluginSandboxProviders.find((provider) => provider.provider === nextProviderKey) ?? null;
                         setEnvironmentForm((current) => ({
                           ...current,
-                          sandboxProvider: e.target.value,
-                          sandboxConfig: nextProvider?.configSchema ? getDefaultValues(nextProvider.configSchema as any) : {},
+                          sandboxProvider: nextProviderKey,
+                          sandboxConfig:
+                            current.sandboxProvider === nextProviderKey
+                              ? current.sandboxConfig
+                              : nextProvider?.configSchema
+                                ? getDefaultValues(nextProvider.configSchema as any)
+                                : {},
                         }));
                       }}
                     >

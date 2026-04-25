@@ -12,6 +12,15 @@ export function collectSecretRefPaths(
   if (!schema || typeof schema !== "object") return paths;
 
   function walk(node: Record<string, unknown>, prefix: string): void {
+    for (const keyword of ["allOf", "anyOf", "oneOf"] as const) {
+      const branches = node[keyword];
+      if (!Array.isArray(branches)) continue;
+      for (const branch of branches) {
+        if (!branch || typeof branch !== "object" || Array.isArray(branch)) continue;
+        walk(branch as Record<string, unknown>, prefix);
+      }
+    }
+
     const properties = node.properties as Record<string, Record<string, unknown>> | undefined;
     if (!properties || typeof properties !== "object") return;
     for (const [key, propertySchema] of Object.entries(properties)) {
@@ -20,9 +29,7 @@ export function collectSecretRefPaths(
       if (propertySchema.format === "secret-ref") {
         paths.add(path);
       }
-      if (propertySchema.type === "object") {
-        walk(propertySchema, path);
-      }
+      walk(propertySchema, path);
     }
   }
 
