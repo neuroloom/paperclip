@@ -59,10 +59,20 @@ async function createSandbox(config: E2bDriverConfig): Promise<Sandbox> {
   return await Sandbox.create(config.template, options);
 }
 
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function ensureSandboxWorkspace(sandbox: Sandbox, remoteCwd: string): Promise<void> {
+  await sandbox.commands.run(`mkdir -p ${shellQuote(remoteCwd)}`);
+}
+
 async function resolveSandboxWorkingDirectory(sandbox: Sandbox): Promise<string> {
   const result = await sandbox.commands.run("pwd");
   const cwd = result.stdout.trim();
-  return path.posix.join(cwd.length > 0 ? cwd : "/", "paperclip-workspace");
+  const remoteCwd = path.posix.join(cwd.length > 0 ? cwd : "/", "paperclip-workspace");
+  await ensureSandboxWorkspace(sandbox, remoteCwd);
+  return remoteCwd;
 }
 
 async function connectSandbox(config: E2bDriverConfig, providerLeaseId: string): Promise<Sandbox> {
@@ -105,6 +115,28 @@ function shellQuote(value: string) {
 
 function buildCommandLine(command: string, args: string[] = []) {
   return `exec ${[command, ...args].map(shellQuote).join(" ")}`;
+}
+
+async function killSandboxBestEffort(sandbox: Sandbox, reason: string): Promise<void> {
+  await sandbox.kill().catch((error) => {
+    console.warn(`Failed to kill E2B sandbox during ${reason}: ${formatErrorMessage(error)}`);
+  });
+}
+
+async function releaseSandboxBestEffort(sandbox: Sandbox, reuseLease: boolean): Promise<void> {
+  if (!reuseLease) {
+    await killSandboxBestEffort(sandbox, "lease release");
+    return;
+  }
+
+  try {
+    await sandbox.pause();
+  } catch (error) {
+    console.warn(
+      `Failed to pause E2B sandbox during lease release: ${formatErrorMessage(error)}. Attempting kill instead.`,
+    );
+    await killSandboxBestEffort(sandbox, "lease release fallback cleanup");
+  }
 }
 
 const plugin = definePlugin({
@@ -228,11 +260,7 @@ const plugin = definePlugin({
     const sandbox = await connectForCleanup(config, params.providerLeaseId);
     if (!sandbox) return;
 
-    if (config.reuseLease) {
-      await sandbox.pause();
-    } else {
-      await sandbox.kill();
-    }
+    await releaseSandboxBestEffort(sandbox, config.reuseLease);
   },
 
   async onEnvironmentDestroyLease(
@@ -241,17 +269,24 @@ const plugin = definePlugin({
     if (!params.providerLeaseId) return;
     const config = parseDriverConfig(params.config);
     const sandbox = await connectForCleanup(config, params.providerLeaseId);
-    await sandbox?.kill();
+    if (!sandbox) return;
+    await killSandboxBestEffort(sandbox, "lease destroy");
   },
 
   async onEnvironmentRealizeWorkspace(
     params: PluginEnvironmentRealizeWorkspaceParams,
   ): Promise<PluginEnvironmentRealizeWorkspaceResult> {
+    const config = parseDriverConfig(params.config);
     const remoteCwd =
       typeof params.lease.metadata?.remoteCwd === "string" &&
       params.lease.metadata.remoteCwd.trim().length > 0
         ? params.lease.metadata.remoteCwd.trim()
         : params.workspace.remotePath ?? params.workspace.localPath ?? "/paperclip-workspace";
+
+    if (params.lease.providerLeaseId) {
+      const sandbox = await connectSandbox(config, params.lease.providerLeaseId);
+      await ensureSandboxWorkspace(sandbox, remoteCwd);
+    }
 
     return {
       cwd: remoteCwd,

@@ -18,6 +18,7 @@ try {
   if (stat.isSymbolicLink()) {
     rmSync(linkTarget, { force: true });
   } else {
+    console.log("  i Keeping existing installed @paperclipai/plugin-sdk directory in place");
     process.exit(0);
   }
 } catch {

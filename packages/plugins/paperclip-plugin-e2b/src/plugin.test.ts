@@ -57,9 +57,16 @@ function createMockSandbox(overrides: {
     commands: {
       run: vi.fn(async (command: string, options?: { background?: boolean }) => {
         if (options?.background) return handle;
+        if (command === "pwd") {
+          return {
+            exitCode: 0,
+            stdout: `${overrides.pwd ?? "/home/user"}\n`,
+            stderr: "",
+          };
+        }
         return {
           exitCode: 0,
-          stdout: `${overrides.pwd ?? "/home/user"}\n`,
+          stdout: "",
           stderr: "",
         };
       }),
@@ -74,6 +81,7 @@ describe("E2B sandbox provider plugin", () => {
   beforeEach(() => {
     mockCreate.mockReset();
     mockConnect.mockReset();
+    vi.restoreAllMocks();
     delete process.env.E2B_API_KEY;
   });
 
@@ -149,6 +157,8 @@ describe("E2B sandbox provider plugin", () => {
         remoteCwd: "/home/user/paperclip-workspace",
       },
     });
+    expect(sandbox.commands.run).toHaveBeenNthCalledWith(1, "pwd");
+    expect(sandbox.commands.run).toHaveBeenNthCalledWith(2, "mkdir -p '/home/user/paperclip-workspace'");
   });
 
   it("kills the sandbox if acquire setup fails after creation", async () => {
@@ -298,5 +308,85 @@ describe("E2B sandbox provider plugin", () => {
     expect(reusable.pause).toHaveBeenCalled();
     expect(reusable.kill).not.toHaveBeenCalled();
     expect(ephemeral.kill).toHaveBeenCalled();
+  });
+
+  it("falls back to kill when pausing a reusable lease fails", async () => {
+    const sandbox = createMockSandbox({ sandboxId: "sandbox-reusable" });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    sandbox.pause.mockRejectedValueOnce(new Error("pause failed"));
+    mockConnect.mockResolvedValue(sandbox);
+
+    await expect(plugin.definition.onEnvironmentReleaseLease?.({
+      driverKey: "e2b",
+      companyId: "company-1",
+      environmentId: "env-1",
+      config: {
+        template: "base",
+        apiKey: "resolved-key",
+        timeoutMs: 300000,
+        reuseLease: true,
+      },
+      providerLeaseId: "sandbox-reusable",
+    })).resolves.toBeUndefined();
+
+    expect(sandbox.pause).toHaveBeenCalled();
+    expect(sandbox.kill).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it("creates the remote workspace before returning it", async () => {
+    const sandbox = createMockSandbox({ sandboxId: "sandbox-realize" });
+    mockConnect.mockResolvedValue(sandbox);
+
+    await expect(plugin.definition.onEnvironmentRealizeWorkspace?.({
+      driverKey: "e2b",
+      companyId: "company-1",
+      environmentId: "env-1",
+      config: {
+        template: "base",
+        apiKey: "resolved-key",
+        timeoutMs: 300000,
+        reuseLease: false,
+      },
+      lease: {
+        providerLeaseId: "sandbox-realize",
+        metadata: { remoteCwd: "/home/user/paperclip-workspace" },
+      },
+      workspace: {
+        localPath: "/tmp/paperclip-workspace",
+      },
+    })).resolves.toEqual({
+      cwd: "/home/user/paperclip-workspace",
+      metadata: {
+        provider: "e2b",
+        remoteCwd: "/home/user/paperclip-workspace",
+      },
+    });
+
+    expect(mockConnect).toHaveBeenCalledWith("sandbox-realize", expect.objectContaining({ apiKey: "resolved-key" }));
+    expect(sandbox.commands.run).toHaveBeenCalledWith("mkdir -p '/home/user/paperclip-workspace'");
+  });
+
+  it("swallows destroy kill errors after logging them", async () => {
+    const sandbox = createMockSandbox({ sandboxId: "sandbox-destroy" });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    sandbox.kill.mockRejectedValueOnce(new Error("kill failed"));
+    mockConnect.mockResolvedValue(sandbox);
+
+    await expect(plugin.definition.onEnvironmentDestroyLease?.({
+      driverKey: "e2b",
+      companyId: "company-1",
+      environmentId: "env-1",
+      config: {
+        template: "base",
+        apiKey: "resolved-key",
+        timeoutMs: 300000,
+        reuseLease: false,
+      },
+      providerLeaseId: "sandbox-destroy",
+    })).resolves.toBeUndefined();
+
+    expect(sandbox.kill).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
   });
 });

@@ -12,6 +12,7 @@ const sdkPackageJsonPath = join(repoRoot, "packages", "plugins", "sdk", "package
 
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 const sdkPackageJson = JSON.parse(readFileSync(sdkPackageJsonPath, "utf8"));
+const publishConfig = packageJson.publishConfig ?? {};
 
 const publishPackageJson = {
   name: packageJson.name,
@@ -22,8 +23,10 @@ const publishPackageJson = {
   bugs: packageJson.bugs,
   repository: packageJson.repository,
   type: packageJson.type,
-  exports: packageJson.exports,
-  publishConfig: packageJson.publishConfig,
+  exports: publishConfig.exports ?? packageJson.exports,
+  main: publishConfig.main,
+  types: publishConfig.types,
+  publishConfig,
   files: packageJson.files,
   paperclipPlugin: packageJson.paperclipPlugin,
   keywords: packageJson.keywords,
