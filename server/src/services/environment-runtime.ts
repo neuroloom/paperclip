@@ -381,7 +381,8 @@ function createSandboxEnvironmentDriver(
             ).then((resumed) =>
               typeof resumed.providerLeaseId === "string" && resumed.providerLeaseId.length > 0
                 ? resumed
-                : null)
+                : null,
+            ).catch(() => null)
           : null;
         const acquiredLease = providerLease ?? await pluginWorkerManager.call(
           pluginProvider.plugin.id,
