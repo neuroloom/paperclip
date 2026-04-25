@@ -630,6 +630,7 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
             metadata: {
               provider: "secure-plugin",
               template: "base",
+              apiKey: "resolved-provider-key",
               timeoutMs: 1234,
               reuseLease: false,
               sandboxId: "sandbox-1",
@@ -660,6 +661,13 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
       issueId: null,
       heartbeatRunId: runId,
       persistedExecutionWorkspace: null,
+    });
+    expect(acquired.lease.metadata).toMatchObject({
+      provider: "secure-plugin",
+      template: "base",
+      apiKey: apiSecret.id,
+      timeoutMs: 1234,
+      sandboxId: "sandbox-1",
     });
     const executed = await runtimeWithPlugin.execute({
       environment,
